@@ -68,9 +68,9 @@ TVOS_SIM_ARCHS=("x86_64" "arm64")
 MAC_CATALYST_ARCHS=("x86_64")
 
 # Applied to all platforms
-CXX_FLAGS="-std=c++14 -stdlib=libc++"
+CXX_FLAGS="-std=c++17 -stdlib=libc++"
 LD_FLAGS=""
-OTHER_FLAGS="-DNDEBUG"
+DEBUG_FLAGS="-DNDEBUG"
 
 XCODE_VERSION=$(xcrun xcodebuild -version | head -n1 | tr -Cd '[:digit:].')
 XCODE_ROOT=$(xcode-select -print-path)
@@ -311,6 +311,9 @@ OPTIONS:
         Specify the number of threads to use.
         Defaults to $THREADS
 
+    -n | --dry-run
+        Only print the build commands, dont execute them
+
 EOF
 }
 
@@ -537,6 +540,7 @@ parseArgs()
 
             --debug)
                 BUILD_VARIANT=debug
+                DEBUG_FLAGS=''
                 ;;
 
             --clean)
@@ -568,6 +572,9 @@ parseArgs()
                 fi
                 ;;
 
+            -n | --dry-run)
+                DRY_RUN="-n"
+                ;;
             *)
                 unknownParameter "$1"
                 ;;
@@ -706,6 +713,8 @@ downloadBoost()
 
 unpackBoost()
 {
+    [ -d "$BOOST_SRC" ] && return
+
     [ -f "$BOOST_TARBALL" ] || abort "Source tarball missing."
 
     echo Unpacking boost into "$SRCDIR"...
@@ -769,7 +778,7 @@ using darwin : $COMPILER_VERSION~iphone
   <target-os>iphone
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $IOS_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${IOS_ARCH_FLAGS[*]} $EXTRA_IOS_FLAGS -isysroot $IOS_SDK_PATH"
+  <compileflags>"$DEBUG_FLAGS ${IOS_ARCH_FLAGS[*]} $EXTRA_IOS_FLAGS -isysroot $IOS_SDK_PATH"
   <threading>multi
 
 ;
@@ -779,7 +788,7 @@ using darwin : $COMPILER_VERSION~iphonesim
   <target-os>iphone
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $IOSSIM_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${IOS_SIM_ARCH_FLAGS[*]} $EXTRA_IOS_SIM_FLAGS -isysroot $IOSSIM_SDK_PATH"
+  <compileflags>"$DEBUG_FLAGS ${IOS_SIM_ARCH_FLAGS[*]} $EXTRA_IOS_SIM_FLAGS -isysroot $IOSSIM_SDK_PATH"
   <threading>multi
 ;
 using darwin : $COMPILER_VERSION~appletv
@@ -788,7 +797,7 @@ using darwin : $COMPILER_VERSION~appletv
   <target-os>iphone
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $TVOS_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${TVOS_ARCH_FLAGS[*]} $EXTRA_TVOS_FLAGS -isysroot $TVOS_SDK_PATH"
+  <compileflags>"$DEBUG_FLAGS ${TVOS_ARCH_FLAGS[*]} $EXTRA_TVOS_FLAGS -isysroot $TVOS_SDK_PATH"
   <threading>multi
 ;
 using darwin : $COMPILER_VERSION~appletvsim
@@ -797,7 +806,7 @@ using darwin : $COMPILER_VERSION~appletvsim
   <target-os>iphone
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $TVOSSIM_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${TVOS_SIM_ARCH_FLAGS[*]} $EXTRA_TVOS_SIM_FLAGS -isysroot $TVOSSIM_SDK_PATH"
+  <compileflags>"$DEBUG_FLAGS ${TVOS_SIM_ARCH_FLAGS[*]} $EXTRA_TVOS_SIM_FLAGS -isysroot $TVOSSIM_SDK_PATH"
   <threading>multi
 ;
 using darwin : $COMPILER_VERSION~macos
@@ -806,7 +815,7 @@ using darwin : $COMPILER_VERSION~macos
   <target-os>darwin
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $MACOS_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${MACOS_ARCH_FLAGS[*]} $EXTRA_MACOS_FLAGS -isysroot $MACOS_SDK_PATH"
+  <compileflags>"$DEBUG_FLAGS ${MACOS_ARCH_FLAGS[*]} $EXTRA_MACOS_FLAGS -isysroot $MACOS_SDK_PATH"
   <threading>multi
 ;
 using darwin : $COMPILER_VERSION~macossilicon
@@ -815,7 +824,7 @@ using darwin : $COMPILER_VERSION~macossilicon
   <target-os>darwin
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $MACOS_SILICON_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${MACOS_SILICON_ARCH_FLAGS[*]} $EXTRA_MACOS_SILICON_FLAGS -isysroot $MACOS_SILICON_SDK_PATH" -target arm64-apple-macos$MIN_MACOS_SILICON_VERSION
+  <compileflags>"$DEBUG_FLAGS ${MACOS_SILICON_ARCH_FLAGS[*]} $EXTRA_MACOS_SILICON_FLAGS -isysroot $MACOS_SILICON_SDK_PATH" -target arm64-apple-macos$MIN_MACOS_SILICON_VERSION
 ;
 using darwin : $COMPILER_VERSION~maccatalyst
 : $COMPILER
@@ -823,7 +832,7 @@ using darwin : $COMPILER_VERSION~maccatalyst
   <target-os>darwin
   <cxxflags>"$CXX_FLAGS"
   <linkflags>"$LD_FLAGS -isysroot $MAC_CATALYST_SDK_PATH"
-  <compileflags>"$OTHER_FLAGS ${MAC_CATALYST_ARCH_FLAGS[*]} -isysroot $MAC_CATALYST_SDK_PATH -target x86_64-apple-ios$MIN_MAC_CATALYST_VERSION-macabi"
+  <compileflags>"$DEBUG_FLAGS ${MAC_CATALYST_ARCH_FLAGS[*]} -isysroot $MAC_CATALYST_SDK_PATH -target x86_64-apple-ios$MIN_MAC_CATALYST_VERSION-macabi"
   <threading>multi
 ;
 $USING_MPI
@@ -883,7 +892,10 @@ bootstrapBoost()
 
     if [[ ${#BOOST_LIBS[@]} -eq 0 ]]; then
         ALL_BOOST_LIBS_COMMA=$(IFS=, ; echo "${ALL_BOOST_LIBS[*]}")
-        ./bootstrap.sh --without-libraries="$ALL_BOOST_LIBS_COMMA"
+
+        ./bootstrap.sh --without-libraries="$ALL_BOOST_LIBS_COMMA" \
+            >> "${OUTPUT_DIR}/boost-bootstrap-$BUILD_VARIANT.log" 2>&1 \
+            || { echo "Error running bootstrap.sh Check log."; exit 1; }
     else
         BOOTSTRAP_LIBS=("${BOOST_LIBS[@]}")
         # Strip out unsupported / unavailable libraries
@@ -904,7 +916,9 @@ bootstrapBoost()
 
         BOOST_LIBS_COMMA=$(IFS=, ; echo "${BOOTSTRAP_LIBS[*]}")
         echo "Bootstrapping for $1 (with libs $BOOST_LIBS_COMMA)"
-        ./bootstrap.sh --with-libraries="$BOOST_LIBS_COMMA"
+        ./bootstrap.sh --with-libraries="$BOOST_LIBS_COMMA" \
+            >> "${OUTPUT_DIR}/boost-bootstrap-$BUILD_VARIANT.log" 2>&1 \
+            || { echo "Error running bootstrap.sh Check log."; exit 1; }
     fi
 
     doneSection
@@ -919,7 +933,7 @@ buildBoost_iOS()
 
     echo Building Boost for iPhone
     # Install this one so we can copy the headers for the frameworks...
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=iphone-build \
         --stagedir=iphone-build/stage \
         --prefix="$IOS_OUTPUT_DIR/prefix" \
@@ -929,7 +943,7 @@ buildBoost_iOS()
         stage >> "${IOS_OUTPUT_DIR}/ios-build.log" 2>&1 \
         || { echo "Error staging iPhone. Check log."; exit 1; }
 
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=iphone-build \
         --stagedir=iphone-build/stage \
         --prefix="$IOS_OUTPUT_DIR/prefix" \
@@ -941,7 +955,7 @@ buildBoost_iOS()
     doneSection
 
     echo Building Boost for iPhoneSimulator
-    $B2 "$THREADS"  \
+    $B2 $THREADS $B2_FLAGS  \
         --build-dir=iphonesim-build \
         --stagedir=iphonesim-build/stage \
         toolset="darwin-$COMPILER_VERSION~iphonesim" \
@@ -958,7 +972,7 @@ buildBoost_tvOS()
     mkdir -p "$TVOS_OUTPUT_DIR"
 
     echo Building Boost for AppleTV
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=appletv-build \
         --stagedir=appletv-build/stage \
         --prefix="$TVOS_OUTPUT_DIR/prefix" \
@@ -968,7 +982,7 @@ buildBoost_tvOS()
         stage >> "${TVOS_OUTPUT_DIR}/tvos-build.log" 2>&1 \
         || { echo "Error staging AppleTV. Check log."; exit 1; }
 
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=appletv-build \
         --stagedir=appletv-build/stage \
         --prefix="$TVOS_OUTPUT_DIR/prefix" \
@@ -980,7 +994,7 @@ buildBoost_tvOS()
     doneSection
 
     echo "Building Boost for AppleTVSimulator"
-    $B2 "$THREADS"  \
+    $B2 $THREADS $B2_FLAGS  \
         --build-dir=appletvsim-build \
         --stagedir=appletvsim-build/stage \
         --prefix="$TVOS_OUTPUT_DIR/prefix" \
@@ -997,8 +1011,8 @@ buildBoost_macOS()
     cd_or_abort "$BOOST_SRC_CURRENT"
     mkdir -p "$MACOS_OUTPUT_DIR"
 
-    echo building Boost for macOS
-    $B2 "$THREADS" \
+    echo "building Boost for macOS at: " && pwd
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=macos-build \
         --stagedir=macos-build/stage \
         --prefix="$MACOS_OUTPUT_DIR/prefix" \
@@ -1008,7 +1022,7 @@ buildBoost_macOS()
         stage >> "${MACOS_OUTPUT_DIR}/macos-build.log" 2>&1 \
         || { echo "Error staging macOS. Check log."; exit 1; }
 
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=macos-build \
         --stagedir=macos-build/stage \
         --prefix="$MACOS_OUTPUT_DIR/prefix" \
@@ -1027,7 +1041,7 @@ buildBoost_macOS_silicon()
     mkdir -p "$MACOS_SILICON_OUTPUT_DIR"
 
     echo building Boost for macOS Silicon
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=macos-silicon-build \
         --stagedir=macos-silicon-build/stage \
         --prefix="$MACOS_SILICON_OUTPUT_DIR/prefix" \
@@ -1037,7 +1051,7 @@ buildBoost_macOS_silicon()
         stage >> "${MACOS_SILICON_OUTPUT_DIR}/macos-silicon-build.log" 2>&1 \
         || { echo "Error staging macOS silicon. Check log."; exit 1; }
 
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=macos-silicon-build \
         --stagedir=macos-silicon-build/stage \
         --prefix="$MACOS_SILICON_OUTPUT_DIR/prefix" \
@@ -1055,7 +1069,7 @@ buildBoost_mac_catalyst()
 
     echo Building Boost for Mac Catalyst
     # Install this one so we can copy the headers for the frameworks...
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=mac-catalyst-build \
         --stagedir=mac-catalyst-build/stage \
         --prefix="$MAC_CATALYST_OUTPUT_DIR/prefix" \
@@ -1065,7 +1079,7 @@ buildBoost_mac_catalyst()
         stage >> "${MAC_CATALYST_OUTPUT_DIR}/mac-catalyst-build.log" 2>&1 \
         || { echo "Error staging Mac Catalyst. Check log."; exit 1; }
 
-    $B2 "$THREADS" \
+    $B2 $THREADS $B2_FLAGS \
         --build-dir=mac-catalyst-build \
         --stagedir=mac-catalyst-build/stage \
         --prefix="$MAC_CATALYST_OUTPUT_DIR/prefix" \
@@ -1648,8 +1662,11 @@ BUILD_TVOS=''
 BUILD_MACOS=''
 BUILD_MACOS_SILICON=''
 BUILD_MAC_CATALYST=''
+DRY_RUN=
 
 parseArgs "$@"
+
+B2_FLAGS="$DRY_RUN -d+2"
 
 if [[ -z $BUILD_IOS && -z $BUILD_TVOS && -z $BUILD_MACOS && -z $BUILD_MAC_CATALYST && -z $BUILD_MACOS_SILICON ]]; then
     BUILD_IOS=1
@@ -1660,7 +1677,8 @@ if [[ -z $BUILD_IOS && -z $BUILD_TVOS && -z $BUILD_MACOS && -z $BUILD_MAC_CATALY
 fi
 
 # Must set these after parseArgs to fill in overridden values
-EXTRA_FLAGS="-fembed-bitcode -Wno-unused-local-typedef -Wno-nullability-completeness"
+EXTRA_FLAGS="-Wno-unused-local-typedef -Wno-nullability-completeness"
+# EXTRA_FLAGS="$EXTRA_FLAGS -fembed-bitcode"
 
 # The EXTRA_ARM_FLAGS definition works around a thread race issue in
 # shared_ptr. I encountered this historically and have not verified that
@@ -1671,7 +1689,8 @@ EXTRA_FLAGS="-fembed-bitcode -Wno-unused-local-typedef -Wno-nullability-complete
 # Note these flags (BOOST_AC_USE_PTHREADS and BOOST_SP_USE_PTHREADS) should
 # only be defined for arm targets. They will cause random (but repeatable)
 # shared_ptr crashes on macOS in boost thread destructors.
-EXTRA_ARM_FLAGS="-DBOOST_AC_USE_PTHREADS -DBOOST_SP_USE_PTHREADS -g -DNDEBUG"
+EXTRA_ARM_FLAGS="-g"
+#EXTRA_ARM_FLAGS="$EXTRA_ARM_FLAGS -DBOOST_AC_USE_PTHREADS -DBOOST_SP_USE_PTHREADS "
 
 EXTRA_IOS_FLAGS="$EXTRA_FLAGS $EXTRA_ARM_FLAGS -mios-version-min=$MIN_IOS_VERSION"
 EXTRA_IOS_SIM_FLAGS="$EXTRA_FLAGS $EXTRA_ARM_FLAGS -mios-simulator-version-min=$MIN_IOS_VERSION"
@@ -1812,6 +1831,9 @@ copyMissingHeaders
 patchBoost
 updateBoostUserConfigJam
 
+rm -f "${OUTPUT_DIR}/boost-thinning.log"
+rm -f "${OUTPUT_DIR}/boost-bootstrap-$BUILD_VARIANT.log"
+
 if [[ -z $NO_THINNING ]]; then
     bootstrapBoost "bcp" # Necessary to have the b2 binary for building bcp
     thinBoost
@@ -1838,15 +1860,17 @@ if [[ -n $BUILD_MAC_CATALYST ]]; then
     buildBoost_mac_catalyst
 fi
 
-scrunchAllLibsTogetherInOneLibPerPlatform
-if [[ -n $UNIVERSAL ]]; then
-    buildUniversal
-fi
+if [ -z "$DRY_RUN" ]; then
+  scrunchAllLibsTogetherInOneLibPerPlatform
+  if [[ -n $UNIVERSAL ]]; then
+      buildUniversal
+  fi
 
-if [[ -z $NO_FRAMEWORK ]]; then
-    DIST_DIR="$CURRENT_DIR/dist"
-    mkdir -p "$DIST_DIR"
-    buildXCFramework "$DIST_DIR"
+  if [[ -z $NO_FRAMEWORK ]]; then
+      DIST_DIR="$CURRENT_DIR/dist"
+      mkdir -p "$DIST_DIR"
+      buildXCFramework "$DIST_DIR"
+  fi
 fi
 
 echo "Completed successfully"
