@@ -890,6 +890,7 @@ bootstrapBoost()
         fi
     fi
 
+    mkdir -p "${OUTPUT_DIR}"
     if [[ ${#BOOST_LIBS[@]} -eq 0 ]]; then
         ALL_BOOST_LIBS_COMMA=$(IFS=, ; echo "${ALL_BOOST_LIBS[*]}")
 
