@@ -68,7 +68,7 @@ TVOS_SIM_ARCHS=("x86_64" "arm64")
 MAC_CATALYST_ARCHS=("x86_64")
 
 # Applied to all platforms
-CXX_FLAGS="-std=c++17 -stdlib=libc++"
+CXX_FLAGS="-std=c++17 -stdlib=libc++ -Werror=unguarded-availability"
 LD_FLAGS=""
 DEBUG_FLAGS="-DNDEBUG"
 
@@ -1678,8 +1678,8 @@ if [[ -z $BUILD_IOS && -z $BUILD_TVOS && -z $BUILD_MACOS && -z $BUILD_MAC_CATALY
 fi
 
 # Must set these after parseArgs to fill in overridden values
-EXTRA_FLAGS="-Wno-unused-local-typedef -Wno-nullability-completeness"
-# EXTRA_FLAGS="$EXTRA_FLAGS -fembed-bitcode"
+EXTRA_FLAGS="-Wno-unused-local-typedef"
+# EXTRA_FLAGS="$EXTRA_FLAGS  -Wno-nullability-completeness -fembed-bitcode"
 
 # The EXTRA_ARM_FLAGS definition works around a thread race issue in
 # shared_ptr. I encountered this historically and have not verified that
